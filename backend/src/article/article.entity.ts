@@ -4,6 +4,7 @@ import {
   Entity,
   EntityDTO,
   ManyToOne,
+  ManyToMany,
   OneToMany,
   PrimaryKey,
   Property,
@@ -43,7 +44,13 @@ export class Article {
   @ManyToOne(() => User, { fieldName: 'author_id' })
   author: User;
 
-  @OneToMany(() => Comment, (comment) => comment.article, { eager: true, orphanRemoval: true })
+  @ManyToMany(() => User)
+  coAuthors = new Collection<User>(this);
+
+  @OneToMany(() => Comment, (comment) => comment.article, {
+    eager: true,
+    orphanRemoval: true,
+  })
   comments = new Collection<Comment>(this);
 
   @Property({ type: 'number', fieldName: 'favorites_count' })
@@ -54,12 +61,18 @@ export class Article {
     this.title = title;
     this.description = description;
     this.body = body;
-    this.slug = slug(title, { lower: true }) + '-' + ((Math.random() * Math.pow(36, 6)) | 0).toString(36);
+    this.slug =
+      slug(title, { lower: true }) +
+      '-' +
+      ((Math.random() * Math.pow(36, 6)) | 0).toString(36);
   }
 
   toJSON(user?: User) {
     const o = wrap<Article>(this).toObject() as ArticleDTO;
-    o.favorited = user && user.favorites.isInitialized() ? user.favorites.contains(this) : false;
+    o.favorited =
+      user && user.favorites.isInitialized()
+        ? user.favorites.contains(this)
+        : false;
     o.author = this.author.toJSON(user);
 
     return o;
