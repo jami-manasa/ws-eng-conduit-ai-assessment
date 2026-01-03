@@ -1,7 +1,7 @@
 import { EntityManager, QueryOrder, wrap } from '@mikro-orm/core';
 import { EntityRepository } from '@mikro-orm/mysql';
 import { InjectRepository } from '@mikro-orm/nestjs';
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 
 import { User } from '../user/user.entity';
 import { Article } from './article.entity';
@@ -31,9 +31,7 @@ export class ArticleService {
       .select('a.*')
       .leftJoin('a.author', 'u');
 
-    if ('tag' in query) {
-      qb.andWhere({ tagList: new RegExp(query.tag) });
-    }
+    if ('tag' in query) qb.andWhere({ tagList: new RegExp(query.tag) });
 
     if ('author' in query) {
       const author = await this.userRepository.findOne({ username: query.author });
@@ -169,7 +167,6 @@ export class ArticleService {
     return { comments: article!.comments.getItems() };
   }
 
-  // ✅ UPDATED: create article with co-authors support
   async create(userId: number, dto: CreateArticleDto) {
     const user = await this.userRepository.findOne(
       { id: userId },
@@ -179,12 +176,10 @@ export class ArticleService {
     const article = new Article(user!, dto.title, dto.description, dto.body);
     article.tagList.push(...dto.tagList);
 
-    // Attach co-authors if provided
     if (dto.coAuthorIds?.length) {
       const coAuthors = await this.userRepository.find({
         id: { $in: dto.coAuthorIds },
       });
-
       for (const coAuthor of coAuthors) {
         article.coAuthors.add(coAuthor);
       }
@@ -196,21 +191,26 @@ export class ArticleService {
     return { article: article.toJSON(user!) };
   }
 
+  // ✅ UPDATED: enforce edit permission (author OR co-author)
   async update(userId: number, slug: string, articleData: Partial<Article>): Promise<IArticleRO> {
-    const user = await this.userRepository.findOne(
-      { id: userId },
-      { populate: ['followers', 'favorites', 'articles'] },
+    const user = await this.userRepository.findOneOrFail(userId);
+
+    const article = await this.articleRepository.findOneOrFail(
+      { slug },
+      { populate: ['author', 'coAuthors'] },
     );
 
-    const article = await this.articleRepository.findOne(
-      { slug },
-      { populate: ['author'] },
-    );
+    const isAuthor = article.author.id === userId;
+    const isCoAuthor = article.coAuthors.contains(user);
+
+    if (!isAuthor && !isCoAuthor) {
+      throw new ForbiddenException('You are not allowed to edit this article');
+    }
 
     wrap(article).assign(articleData);
     await this.em.flush();
 
-    return { article: article!.toJSON(user!) };
+    return { article: article.toJSON(user) };
   }
 
   async delete(slug: string) {
