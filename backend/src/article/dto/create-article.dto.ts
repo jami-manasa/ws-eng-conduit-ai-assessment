@@ -3,4 +3,7 @@ export class CreateArticleDto {
   readonly description: string;
   readonly body: string;
   readonly tagList: string[];
+
+  // List of user IDs selected as co-authors
+  readonly coAuthorIds?: number[];
 }
