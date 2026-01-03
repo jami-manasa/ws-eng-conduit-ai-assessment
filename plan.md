@@ -49,6 +49,12 @@
   - Verifying locking behavior with multiple users.
 - Capture screenshots for each required test.
 - Place screenshots directly in the `submission` folder.
+## Co-Author Feature
+
+- Articles support multiple co-authors
+- Author and co-authors can edit articles
+- Implemented using a many-to-many relationship
+- Permissions enforced at service level
 
 ---
 

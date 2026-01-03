@@ -71,10 +71,10 @@ async function countFilesByExtension(extensions = ['.json']): Promise<number> {
 
 async function createGitDiff(): Promise<string> {
   try {
-    console.log("Disabling GPG signing - this is safe because we're not pushing our commits.");
+
     execCommand('git config commit.gpgsign false');
   } catch {
-    console.log("⚠️ Unable to disable signing. If you get errors about GPG signing, please disable signing in your git config.");
+
   }
   execCommand('git add --all');
   execCommand(`git commit --allow-empty -am "chore(conduit): Generates patch."`);
@@ -84,10 +84,10 @@ async function createGitDiff(): Promise<string> {
   );
   const diffPath = path.join(SUBMISSION_DIR, 'submission.patch');
   if (!diffOutput?.trim()) {
-    console.log("⚠️ No code changes were detected. This may mean that you forked or created your own copy of the repository.");
-    console.log(`If so, reset your git origin to '${REPO_GIT_URL}'.`);
-    console.log(`You can do so by running 'git remote set-url origin ${REPO_GIT_URL}'.`);
-    console.log("Afterward, please run the submit script again to properly detect your code changes.");
+
+
+
+
   }
   await fs.writeFile(diffPath, diffOutput || '');
   return diffPath;
@@ -96,7 +96,7 @@ async function createGitDiff(): Promise<string> {
 async function getSubmissionWarnings(diffPath: string): Promise<string[]> {
   const warnings: string[] = [];
   const diffSize = (await fs.stat(diffPath)).size;
-  
+
   if (diffSize < 100) {
     warnings.push('⚠️ WARNING: Code Quality & Correctness - Your code submission is likely incomplete (patch file is very small). This will affect your evaluation score.');
   }
@@ -185,20 +185,20 @@ async function getClineHistoryPath(): Promise<string | null> {
 }
 
 async function confirmSubmission({ name, email, diffPath }: { name: string; email: string; diffPath: string }) {
-  console.log('');
-  console.log('Submission Contents:');
-  console.log(` Name:        ${name}`);
-  console.log(` Email:       ${email}`);
-  console.log(` Code:        ${diffPath} (size = ${(await fs.stat(diffPath)).size})`);
-  console.log(` Screenshots: ${await countFilesByExtension(['.jpg', '.jpeg', '.png', '.gif', '.bmp'])} files`);
-  console.log('');
-  console.log('Please ensure that all your changes are reflected in the patch file.');
+
+
+
+
+
+
+
+
 
   const warnings = await getSubmissionWarnings(diffPath);
   if (warnings.length > 0) {
-    console.log('\nWarnings:');
+
     warnings.forEach(warning => console.warn(warning));
-    console.log('');
+
   }
 
   const confirm = await prompts({
@@ -209,14 +209,14 @@ async function confirmSubmission({ name, email, diffPath }: { name: string; emai
   });
 
   if (!confirm.value) {
-    console.log('Submission canceled. You can perform the submission later.');
+
     process.exit(0);
   }
 }
 
 async function addFileToZip(zip: JSZip, filePath: string, zipPath: string): Promise<void> {
   const fileContent = await fs.readFile(filePath);
-  console.log(`Adding "${zipPath}" (size = ${fileContent.byteLength}) to submission...`);
+
   zip.file(zipPath, fileContent as unknown as ArrayBuffer);
 }
 
@@ -275,13 +275,13 @@ async function addClineHistory(zip: JSZip): Promise<void> {
 }
 
 async function createZip(): Promise<Buffer> {
-  console.log('');
+
   const zip = new JSZip();
   await addSubmissionFiles(zip);
   await addClineHistory(zip);
   const result = await zip.generateAsync({ type: 'nodebuffer' });
-  console.log(`Submission archive size: ${result.byteLength} bytes`);
-  console.log('');
+
+
   return result;
 }
 
@@ -296,7 +296,7 @@ async function uploadSubmission(zip: Buffer, name: string, email: string): Promi
     form.append('file', zip);
     await axios.post(data.upload.url, form, { headers: form.getHeaders() });
 
-    console.log('Submission successful, ID:', data.submissionId);
+
     console.log(
       'Please copy-paste this ID into the Crossover assessment page. You may resubmit your work as many times as you need, but only the submission with the ID recorded into the Crossover assessment page will be considered.',
     );
