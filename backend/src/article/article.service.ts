@@ -19,7 +19,7 @@ export class ArticleService {
     private readonly commentRepository: EntityRepository<Comment>,
     @InjectRepository(User)
     private readonly userRepository: EntityRepository<User>,
-  ) {}
+  ) { }
 
   async findAll(userId: number, query: Record<string, string>): Promise<IArticlesRO> {
     const user = userId
@@ -31,9 +31,7 @@ export class ArticleService {
       .select('a.*')
       .leftJoin('a.author', 'u');
 
-    if ('tag' in query) {
-      qb.andWhere({ tagList: new RegExp(query.tag) });
-    }
+    if ('tag' in query) qb.andWhere({ tagList: new RegExp(query.tag) });
 
     if ('author' in query) {
       const author = await this.userRepository.findOne({ username: query.author });
@@ -59,12 +57,16 @@ export class ArticleService {
     if ('offset' in query) qb.offset(+query.offset);
 
     const ids = (await qb.getResult()).map((a) => a.id);
+
     const articles = await this.articleRepository.find(
       { id: { $in: ids } },
-      { populate: ['author'] },
+      { populate: ['author', 'coAuthors'] },
     );
 
-    return { articles: articles.map((a) => a.toJSON(user!)), articlesCount };
+    return {
+      articles: articles.map((a) => a.toJSON(user!)),
+      articlesCount,
+    };
   }
 
   async findFeed(userId: number, query: Record<string, string>): Promise<IArticlesRO> {
@@ -75,26 +77,28 @@ export class ArticleService {
     const [articles, articlesCount] = await this.articleRepository.findAndCount(
       { author: { followers: userId } },
       {
-        populate: ['author'],
+        populate: ['author', 'coAuthors'],
         orderBy: { createdAt: QueryOrder.DESC },
         limit: +query.limit,
         offset: +query.offset,
       },
     );
 
-    return { articles: articles.map((a) => a.toJSON(user)), articlesCount };
+    return {
+      articles: articles.map((a) => a.toJSON(user)),
+      articlesCount,
+    };
   }
 
-  // ✅ FIXED: no null article, fully type-safe
   async findOne(userId: number, where: Partial<Article>): Promise<IArticleRO> {
     const user = userId
       ? await this.userRepository.findOneOrFail(userId, {
-          populate: ['followers', 'favorites'],
-        })
+        populate: ['followers', 'favorites'],
+      })
       : undefined;
 
     const article = await this.articleRepository.findOneOrFail(where, {
-      populate: ['author'],
+      populate: ['author', 'coAuthors'],
     });
 
     return { article: article.toJSON(user) };
@@ -103,7 +107,7 @@ export class ArticleService {
   async addComment(userId: number, slug: string, dto: CreateCommentDto) {
     const article = await this.articleRepository.findOneOrFail(
       { slug },
-      { populate: ['author'] },
+      { populate: ['author', 'coAuthors'] },
     );
 
     const author = await this.userRepository.findOneOrFail(userId);
@@ -116,7 +120,7 @@ export class ArticleService {
   async deleteComment(userId: number, slug: string, id: number): Promise<IArticleRO> {
     const article = await this.articleRepository.findOneOrFail(
       { slug },
-      { populate: ['author'] },
+      { populate: ['author', 'coAuthors'] },
     );
 
     const user = await this.userRepository.findOneOrFail(userId);
@@ -133,7 +137,7 @@ export class ArticleService {
   async favorite(id: number, slug: string): Promise<IArticleRO> {
     const article = await this.articleRepository.findOneOrFail(
       { slug },
-      { populate: ['author'] },
+      { populate: ['author', 'coAuthors'] },
     );
 
     const user = await this.userRepository.findOneOrFail(id, {
@@ -152,7 +156,7 @@ export class ArticleService {
   async unFavorite(id: number, slug: string): Promise<IArticleRO> {
     const article = await this.articleRepository.findOneOrFail(
       { slug },
-      { populate: ['author'] },
+      { populate: ['author', 'coAuthors'] },
     );
 
     const user = await this.userRepository.findOneOrFail(id, {
