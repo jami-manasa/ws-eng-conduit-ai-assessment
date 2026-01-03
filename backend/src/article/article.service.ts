@@ -31,7 +31,9 @@ export class ArticleService {
       .select('a.*')
       .leftJoin('a.author', 'u');
 
-    if ('tag' in query) qb.andWhere({ tagList: new RegExp(query.tag) });
+    if ('tag' in query) {
+      qb.andWhere({ tagList: new RegExp(query.tag) });
+    }
 
     if ('author' in query) {
       const author = await this.userRepository.findOne({ username: query.author });
@@ -66,7 +68,7 @@ export class ArticleService {
   }
 
   async findFeed(userId: number, query: Record<string, string>): Promise<IArticlesRO> {
-    const user = await this.userRepository.findOne(userId, {
+    const user = await this.userRepository.findOneOrFail(userId, {
       populate: ['followers', 'favorites'],
     });
 
@@ -80,19 +82,22 @@ export class ArticleService {
       },
     );
 
-    return { articles: articles.map((a) => a.toJSON(user!)), articlesCount };
+    return { articles: articles.map((a) => a.toJSON(user)), articlesCount };
   }
 
+  // ✅ FIXED: no null article, fully type-safe
   async findOne(userId: number, where: Partial<Article>): Promise<IArticleRO> {
     const user = userId
-      ? await this.userRepository.findOneOrFail(userId, { populate: ['followers', 'favorites'] })
+      ? await this.userRepository.findOneOrFail(userId, {
+          populate: ['followers', 'favorites'],
+        })
       : undefined;
 
-    const article = await this.articleRepository.findOne(where, {
+    const article = await this.articleRepository.findOneOrFail(where, {
       populate: ['author'],
     });
 
-    return { article: article && article.toJSON(user) };
+    return { article: article.toJSON(user) };
   }
 
   async addComment(userId: number, slug: string, dto: CreateCommentDto) {
@@ -100,6 +105,7 @@ export class ArticleService {
       { slug },
       { populate: ['author'] },
     );
+
     const author = await this.userRepository.findOneOrFail(userId);
     const comment = new Comment(author, article, dto.body);
 
@@ -112,6 +118,7 @@ export class ArticleService {
       { slug },
       { populate: ['author'] },
     );
+
     const user = await this.userRepository.findOneOrFail(userId);
     const comment = this.commentRepository.getReference(id);
 
@@ -128,6 +135,7 @@ export class ArticleService {
       { slug },
       { populate: ['author'] },
     );
+
     const user = await this.userRepository.findOneOrFail(id, {
       populate: ['favorites', 'followers'],
     });
@@ -146,6 +154,7 @@ export class ArticleService {
       { slug },
       { populate: ['author'] },
     );
+
     const user = await this.userRepository.findOneOrFail(id, {
       populate: ['favorites', 'followers'],
     });
@@ -160,39 +169,46 @@ export class ArticleService {
   }
 
   async findComments(slug: string): Promise<ICommentsRO> {
-    const article = await this.articleRepository.findOne(
+    const article = await this.articleRepository.findOneOrFail(
       { slug },
       { populate: ['comments'] },
     );
-    return { comments: article!.comments.getItems() };
+
+    return { comments: article.comments.getItems() };
   }
 
+  // ✅ Create article with co-authors
   async create(userId: number, dto: CreateArticleDto) {
-    const user = await this.userRepository.findOne(
+    const user = await this.userRepository.findOneOrFail(
       { id: userId },
       { populate: ['followers', 'favorites', 'articles'] },
     );
 
-    const article = new Article(user!, dto.title, dto.description, dto.body);
+    const article = new Article(user, dto.title, dto.description, dto.body);
     article.tagList.push(...dto.tagList);
 
     if (dto.coAuthorIds?.length) {
       const coAuthors = await this.userRepository.find({
         id: { $in: dto.coAuthorIds },
       });
+
       for (const coAuthor of coAuthors) {
         article.coAuthors.add(coAuthor);
       }
     }
 
-    user?.articles.add(article);
+    user.articles.add(article);
     await this.em.flush();
 
-    return { article: article.toJSON(user!) };
+    return { article: article.toJSON(user) };
   }
 
-  // ✅ UPDATED: enforce edit permission (author OR co-author)
-  async update(userId: number, slug: string, articleData: Partial<Article>): Promise<IArticleRO> {
+  // ✅ Author OR co-author can edit
+  async update(
+    userId: number,
+    slug: string,
+    articleData: Partial<Article>,
+  ): Promise<IArticleRO> {
     const user = await this.userRepository.findOneOrFail(userId);
 
     const article = await this.articleRepository.findOneOrFail(
